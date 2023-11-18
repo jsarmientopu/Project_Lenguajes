@@ -6,3 +6,17 @@ class Circle:
 
     def area(self):
         return pi * radius**2
+
+var=0
+var1=0
+var11=0
+var111=0
+def loco(a):
+    return l*pi
+def square():
+    global var, loco
+    a = 0
+    b = loco(a)
+    return var*var
+
+square()
