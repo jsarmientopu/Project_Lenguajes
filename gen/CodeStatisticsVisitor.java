@@ -3,6 +3,7 @@ import org.antlr.v4.runtime.tree.TerminalNode;
 
 import java.lang.reflect.Array;
 import java.util.*;
+import java.util.function.Function;
 
 public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
     private int totalLines = 0;
@@ -17,11 +18,28 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
     private int totalFunctionsVisited = 0;
     private Set<String> globalVariables = new HashSet<>();
     private Set<String> externalDependencies = new HashSet<>();
-    private Queue<String> scope = new LinkedList<>();
+    private Stack<String> scope = new Stack<>();
     private Map<String, Set<String>> functionDependencies = new HashMap<>();
     HashMap<String, String> simbolTable = new HashMap<>();
     private HashMap<String, HashMap<String, String>> localTable = new HashMap<>();
-
+    private ArrayList<FunctionSats> functions=new ArrayList<>();
+    private ArrayList<ClassStats> classes=new ArrayList<>();
+    private double operants=0, ocurOperants=0, ocurOperators =0;
+    private Set<String> operators= new HashSet<>();
+    @Override
+    public T visitSimple_stmt(PythonParser.Simple_stmtContext ctx) {
+        // Increment the node count for each simple statement
+        if(!scope.isEmpty() && localTable.get(scope.peek())!=null){
+            for(FunctionSats func : functions){
+                if(func.getName().equals(scope.peek())){
+                    func.getNodes().add(ctx.getText());
+                    //func.getEdges().add(String.valueOf(func.getWay()));
+                    break;
+                }
+            }
+        }
+        return visitChildren(ctx);
+    }
     @Override
     public T visitAssignment(PythonParser.AssignmentContext ctx) {
         if(ctx.NAME()!=null){
@@ -30,18 +48,13 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
             }else{
                 localTable.get(scope.peek()).putIfAbsent(ctx.NAME().getText(), "Simple variable");
             }
+            operants++;
         }
         return visitChildren(ctx);
     }
     @Override
     public T visitFile_input(PythonParser.File_inputContext ctx) {
         totalLines = ctx.getStop().getLine(); // Total number of lines in the file
-
-        // Visit each statement in the file
-        //for (PythonParser.StatementContext statementContext : ctx.statements().statement()) {
-        //    System.out.println("Visiting statement: " + statementContext.getText());
-        //    visit(statementContext);
-        //}
 
         visitChildren(ctx);
 
@@ -57,6 +70,15 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
         System.out.println("Total If Statements: " + totalIfStatements);
         System.out.println("Total For Statements: " + totalForStatements);
         System.out.println("Total While Statements: " + totalWhileStatements);
+        System.out.println("Program length: "+ (operators.size()+operants));
+        System.out.println("Program volume: "+ ((operators.size()+operants))* (Math.log(operators.size()+operants) / Math.log(2)));
+        System.out.println("Program difficult: "+ ((1.0/2.0)*((operators.size()/ocurOperators)+(operants/ocurOperants))));
+        System.out.println("Program effort time: "+ (((1.0/2.0)*((operators.size()/ocurOperators)+(operants/ocurOperants)))*(Math.log(operators.size()+operants) / Math.log(2))));
+
+        //for(FunctionSats func : functions){
+        //    System.out.println(func.getName());
+        //    func.printGraph();
+        //}
 
         return null;
     }
@@ -72,9 +94,9 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
             totalVariableNameLength += ctx.NAME().getText().length();
             totalVariables++;
         }
+        operants++;
         return visitChildren(ctx);
     }
-
     @Override
     public T visitAtom(PythonParser.AtomContext ctx) {
         // Check if the atom is a function call
@@ -91,9 +113,16 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
                         functionDependencies.get(scope.peek()).add(dependency);
                     }
                 }
+            }else if(!scope.isEmpty() && scope.peek().split("-").length>1){
+                String var = scope.peek().split("-")[1];
+                for(ClassStats clas: classes){
+                    if(var.equals(clas.getName())){
+                        clas.getInheritance().add(ctx.NAME().getText());
+                    }
+                }
             }
         }
-
+        ocurOperants++;
         return visitChildren(ctx);
     }
 
@@ -109,16 +138,30 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
             simbolTable.put(currentFunction,"function");
             localTable.put(currentFunction,new HashMap<>());
         }else{
-            localTable.get(scope.peek()).putIfAbsent(currentFunction,"function");
+            boolean flag = true;
+            for(ClassStats clas : classes){
+                if(clas.getName().equals(scope.peek())){
+                    simbolTable.put(currentFunction,"function");
+                    clas.getMethods().add(currentFunction);
+                    flag = false;
+                    break;
+                }
+            }
+            if(flag){
+                localTable.get(scope.peek()).putIfAbsent(currentFunction,"function");
+            }
         }
-        scope.add(currentFunction);
+        functions.add(new FunctionSats(currentFunction));
+        scope.push(currentFunction);
         functionDependencies.put(currentFunction, new HashSet<>());
         System.out.println("Visited Function Definition: " + currentFunction);
 
         // You can add more logic here for function-specific statistics
         visitChildren(ctx);
+        System.out.println("End Visited Function Definition: " + currentFunction);
+        System.out.println("End Visited Function Definition: " + scope.peek());
 
-        scope.poll();
+        scope.pop();
 
         return null;
     }
@@ -192,9 +235,52 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
     @Override
     public T visitIf_stmt(PythonParser.If_stmtContext ctx) {
         totalIfStatements++;
-        scope.add("if");
+        int prev=0;
+        FunctionSats x = new FunctionSats("");
+        if(!scope.isEmpty() && localTable.get(scope.peek())!=null){
+            for(FunctionSats func: functions){
+                if(func.getName().equals(scope.peek())){
+                    func.setEdges(func.getEdges()+1);
+                    break;
+                }
+            }
+        }
         visitChildren(ctx);
-        scope.poll();
+        // You can add more logic here for if statement-specific statistics
+
+        return null;
+    }
+
+    @Override
+    public T visitElif_stmt(PythonParser.Elif_stmtContext ctx) {
+        int prev=0;
+        FunctionSats x = new FunctionSats("");
+        if(!scope.isEmpty() && localTable.get(scope.peek())!=null){
+            for(FunctionSats func: functions){
+                if(func.getName().equals(scope.peek())){
+                    func.setEdges(func.getEdges()+1);
+                    break;
+                }
+            }
+        }
+        visitChildren(ctx);
+        // You can add more logic here for if statement-specific statistics
+
+        return null;
+    }
+    @Override
+    public T visitElse_block(PythonParser.Else_blockContext ctx) {
+        int prev=0;
+        FunctionSats x = new FunctionSats("");
+        if(!scope.isEmpty() && localTable.get(scope.peek())!=null){
+            for(FunctionSats func: functions){
+                if(func.getName().equals(scope.peek())){
+                    func.setEdges(func.getEdges()+1);
+                    break;
+                }
+            }
+        }
+        visitChildren(ctx);
         // You can add more logic here for if statement-specific statistics
 
         return null;
@@ -203,9 +289,7 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
     @Override
     public T visitFor_stmt(PythonParser.For_stmtContext ctx) {
         totalForStatements++;
-        scope.add("for");
         visitChildren(ctx);
-        scope.poll();
 
         // You can add more logic here for statement-specific statistics
 
@@ -215,14 +299,104 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
     @Override
     public T visitWhile_stmt(PythonParser.While_stmtContext ctx) {
         totalWhileStatements++;
-        scope.add("while");
         visitChildren(ctx);
-        scope.poll();
 
         // You can add more logic here for while statement-specific statistics
 
         return null;
     }
+
+    @Override
+    public T visitEq_bitwise_or(PythonParser.Eq_bitwise_orContext ctx) {operators.add("=="); ocurOperators++; return visitChildren(ctx); }
+    @Override public T visitNoteq_bitwise_or(PythonParser.Noteq_bitwise_orContext ctx) { operators.add("!="); ocurOperators++; return visitChildren(ctx); }
+    @Override public T visitLte_bitwise_or(PythonParser.Lte_bitwise_orContext ctx) { operators.add("<="); ocurOperators++; return visitChildren(ctx); }
+    @Override public T visitLt_bitwise_or(PythonParser.Lt_bitwise_orContext ctx) { operators.add("<"); ocurOperators++; return visitChildren(ctx); }
+    @Override public T visitGte_bitwise_or(PythonParser.Gte_bitwise_orContext ctx) { operators.add(">="); ocurOperators++; return visitChildren(ctx); }
+    @Override public T visitGt_bitwise_or(PythonParser.Gt_bitwise_orContext ctx) { operators.add(">"); ocurOperators++; return visitChildren(ctx); }
+    @Override public T visitNotin_bitwise_or(PythonParser.Notin_bitwise_orContext ctx) { operators.add("not in"); ocurOperators++; return visitChildren(ctx); }
+    @Override public T visitIn_bitwise_or(PythonParser.In_bitwise_orContext ctx) { operators.add("in"); ocurOperators++; return visitChildren(ctx); }
+    @Override public T visitIsnot_bitwise_or(PythonParser.Isnot_bitwise_orContext ctx) { operators.add("is not"); ocurOperators++; return visitChildren(ctx); }
+    @Override public T visitIs_bitwise_or(PythonParser.Is_bitwise_orContext ctx) { operators.add("is"); ocurOperators++; return visitChildren(ctx); }
+    @Override public T visitSum(PythonParser.SumContext ctx) {
+        if(ctx.sum()!=null){
+            if(ctx.getText().contains("+")){
+                operators.add("+");
+            }else{
+                operators.add("-");
+            }
+            ocurOperators++;
+        }
+        return visitChildren(ctx);
+    }
+    @Override public T visitTerm(PythonParser.TermContext ctx) {
+        if(ctx.term()!=null){
+            if(ctx.getText().contains("*")){
+                operators.add("*");
+            }else if(ctx.getText().contains("/")){
+                operators.add("/");
+            }else if(ctx.getText().contains("//")){
+                operators.add("//");
+            }else if(ctx.getText().contains("%")){
+                operators.add("%");
+            }else{
+                operators.add("@");
+            }
+            ocurOperators++;
+        }
+        return visitChildren(ctx);
+    }
+    @Override public T visitFactor(PythonParser.FactorContext ctx) {
+        if(ctx.factor()!=null){
+            if(ctx.getText().contains("+")){
+                operators.add("+");
+            }else if(ctx.getText().contains("-")){
+                operators.add("-");
+            }else{
+                operators.add("~");
+            }
+            ocurOperators++;
+        }
+        return visitChildren(ctx);
+    }
+    @Override public T visitPower(PythonParser.PowerContext ctx) {
+        if(ctx.factor()!=null){
+            operators.add("**");
+            ocurOperators++;
+        }
+        return visitChildren(ctx);
+    }
+
+    @Override
+    public T visitClass_def_raw(PythonParser.Class_def_rawContext ctx) {
+        ClassStats newClass = new ClassStats(ctx.NAME().getText());
+        scope.push(ctx.NAME().getText());
+        System.out.println("Class Definition: " + ctx.NAME().getText());
+        visitChildren(ctx);
+        System.out.println("VisitedClass Definition: " + scope.peek());
+
+        scope.pop();
+        return null;
+    }
+
+    @Override
+    public T visitArguments(PythonParser.ArgumentsContext ctx) {
+        boolean flag = false;
+        if(!scope.isEmpty()){
+            for(ClassStats clas: classes){
+                if(clas.getName().equals(scope.peek())){
+                    scope.push(scope.peek()+"-arguments");
+                    flag = true;
+                    break;
+                }
+            }
+        }
+        visitChildren(ctx);
+        if(flag) {
+            scope.pop();
+        }
+        return null;
+    }
+
 
     // Helper method to calculate the average
     private double calculateAverage(int totalLength, int totalCount) {
@@ -247,6 +421,7 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
     }
 
     public String getFunctions() {
+        System.out.println(functions.size());
         StringBuilder func= new StringBuilder("Variables locales\n");
         for(final String key : localTable.keySet()){
             func.append(key+"\n");
