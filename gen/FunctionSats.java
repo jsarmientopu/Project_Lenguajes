@@ -7,6 +7,8 @@ public class FunctionSats {
     private ArrayList<ArrayList<String>> graph;
     private int edges;
     private ArrayList<Integer> way;
+    private int length;
+    private ArrayList<FunctionSats> dependencies;
 
     public FunctionSats(String name){
         this.name=name;
@@ -15,6 +17,8 @@ public class FunctionSats {
         this.edges=0;
         this.way=new ArrayList<>();
         this.graph=new ArrayList<>();
+        this.length=0;
+        this.dependencies=new ArrayList<>();
     };
 
     public String getName() {
@@ -51,6 +55,18 @@ public class FunctionSats {
 
     public ArrayList<ArrayList<String>> getGraph() {
         return graph;
+    }
+
+    public int getLength() {
+        return length;
+    }
+
+    public void setLength(int length) {
+        this.length = length;
+    }
+
+    public ArrayList<FunctionSats> getDependencies() {
+        return dependencies;
     }
 
     public void printGraph(){

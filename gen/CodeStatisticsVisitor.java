@@ -75,6 +75,8 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
         System.out.println("Program difficult: "+ ((1.0/2.0)*((operators.size()/ocurOperators)+(operants/ocurOperants))));
         System.out.println("Program effort time: "+ (((1.0/2.0)*((operators.size()/ocurOperators)+(operants/ocurOperants)))*(Math.log(operators.size()+operants) / Math.log(2))));
 
+        fixFunctions();
+
         //for(FunctionSats func : functions){
         //    System.out.println(func.getName());
         //    func.printGraph();
@@ -151,15 +153,15 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
                 localTable.get(scope.peek()).putIfAbsent(currentFunction,"function");
             }
         }
-        functions.add(new FunctionSats(currentFunction));
+        FunctionSats newFunc = new FunctionSats(currentFunction);
+        newFunc.setLength(ctx.getStart().getLine()-ctx.getStop().getLine()+1);
+        functions.add(newFunc);
         scope.push(currentFunction);
         functionDependencies.put(currentFunction, new HashSet<>());
         System.out.println("Visited Function Definition: " + currentFunction);
 
         // You can add more logic here for function-specific statistics
         visitChildren(ctx);
-        System.out.println("End Visited Function Definition: " + currentFunction);
-        System.out.println("End Visited Function Definition: " + scope.peek());
 
         scope.pop();
 
@@ -372,7 +374,6 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
         scope.push(ctx.NAME().getText());
         System.out.println("Class Definition: " + ctx.NAME().getText());
         visitChildren(ctx);
-        System.out.println("VisitedClass Definition: " + scope.peek());
 
         scope.pop();
         return null;
@@ -449,5 +450,39 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
             func.append(key+"\n");
         }
         return func.toString();
+    }
+
+    public void fixFunctions(){
+        for(String depend : functionDependencies.keySet()){
+            ArrayList<FunctionSats> dependencies = new ArrayList<>();
+            FunctionSats function = new FunctionSats("");
+            for(String func: functionDependencies.get(depend)){
+                boolean flag = true;
+                for(FunctionSats funct: functions){
+                    if(funct.getName().equals(func)){
+                        dependencies.add(funct);
+                        flag = false;
+                        break;
+                    }
+                }
+                if (flag && externalDependencies.contains(func)){
+                    FunctionSats ext = new FunctionSats(func);
+                    dependencies.add(ext);
+                }
+            }
+            for(FunctionSats func : functions){
+                if(func.getName().equals(depend)){
+                    function = func;;
+                    break;
+                }
+            }
+            function.getDependencies().addAll(dependencies);
+        }
+        for(FunctionSats func: functions){
+            System.out.println(func.getName());
+            for(FunctionSats func1 :func.getDependencies()){
+                System.out.println("\t"+func1.getName());
+            }
+        }
     }
 }

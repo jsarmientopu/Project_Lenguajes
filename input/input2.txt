@@ -1,0 +1,9 @@
+import paquete2;
+
+public class HelloWorld {
+   public static void main(String[] args) {
+      avemria = a+b+1+2/6+getLoco(a+b);
+      bobo=c;
+      System.out.println("Hello, World");
+   }
+}
