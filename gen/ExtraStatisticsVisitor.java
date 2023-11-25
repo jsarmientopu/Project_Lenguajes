@@ -52,7 +52,7 @@ public class ExtraStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
 
         double averageVariableNameLength = calculateAverage(totalVariableNameLength, totalVariables);
         double averageFunctionNameLength = calculateAverage(totalFunctionNameLength, totalFunctionsVisited);
-        System.out.println(averageFunctionNameLength);
+        /*System.out.println(averageFunctionNameLength);
         System.out.println(averageVariableNameLength);
         // Print the collected statistics
         System.out.println("Total Lines of Code: " + totalLines);
@@ -62,7 +62,7 @@ public class ExtraStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
         System.out.println("Total If Statements: " + totalIfStatements);
         System.out.println("Total For Statements: " + totalForStatements);
         System.out.println("Total While Statements: " + totalWhileStatements);
-        System.out.println("Total variables: "+ totalVariables);
+        System.out.println("Total variables: "+ totalVariables);*/
 
         return null;
     }
@@ -114,10 +114,18 @@ public class ExtraStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
         // Check if the atom is a function call
         if (ctx.NAME()!=null) {
             String functionName = ctx.NAME().getText();
+            //is a function call
             if (!scope.isEmpty() && localTable.get(scope.peek())!=null && simbolTable.get(functionName)!=null && simbolTable.get(functionName).equals("function") && !functionName.equals(scope.peek())) {
                 // Add the called function to the dependencies
                 functionDependencies.get(scope.peek()).add(functionName);
+            }else if(variableCounter.containsKey(functionName)){
+                // check if used as argument
+                // helps in checking unused of variables
+                List<Integer> modified = variableCounter.get(ctx.NAME().getText());
+                modified.set(0,modified.get(0)+1);
+                variableCounter.put(ctx.NAME().getText(), modified);
             }else if(!scope.isEmpty() && localTable.get(scope.peek())!=null){
+                //Check use of imports
                 for(String dependency: externalDependencies){
                     String val = dependency.split("\\.")[dependency.split("\\.").length-1];
                     String val2 = dependency.split("=")[dependency.split("=").length-1];
@@ -125,11 +133,15 @@ public class ExtraStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
                         functionDependencies.get(scope.peek()).add(dependency);
                     }
                 }
+
+
+
             }
         }
 
         return visitChildren(ctx);
     }
+
 
     @Override
     public T visitFunction_def(PythonParser.Function_defContext ctx) {
@@ -147,7 +159,7 @@ public class ExtraStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
         }
         scope.add(currentFunction);
         functionDependencies.put(currentFunction, new HashSet<>());
-        System.out.println("Visited Function Definition: " + currentFunction);
+        //System.out.println("Visited Function Definition: " + currentFunction);
 
         // You can add more logic here for function-specific statistics
         visitChildren(ctx);
@@ -311,13 +323,22 @@ public class ExtraStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
     }
 
     public void getUnusedVariables(){
+        /*
+        * Function that builds an ordered map (by line number) with the variables that
+        * where used only one time (when declared), so its value is never used after in the
+        * program's logic.
+        *
+        * */
         Map<String, Integer> unused = new HashMap<>();
 
+        //get map from variableCounter
         for(String key: variableCounter.keySet()){
             if(variableCounter.get(key).get(0) == 1){
                 unused.put(key, variableCounter.get(key).get(1) );
             }
         }
+
+        //order map
         Map<String, Integer> ordered = unused.entrySet().stream()
                 .sorted(Map.Entry.comparingByValue())
                 .collect(Collectors.toMap(
@@ -326,6 +347,8 @@ public class ExtraStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
                     (e1, e2) -> e1, // Si hay duplicados, mantener el valor existente
                     LinkedHashMap::new // Mantener el orden de inserción
                 ));
+
+
         if(!ordered.isEmpty()) printUnused(ordered);
     }
 
