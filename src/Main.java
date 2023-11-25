@@ -8,22 +8,23 @@ import java.util.ArrayList;
 public class Main {
     public static void main(String[] args) throws Exception {
         try{
-            // crear un analizador léxico a partir de la entrada (archivo  o consola)
             PythonLexer lexer=new PythonLexer(CharStreams.fromFileName("input/input.txt"));
-            // Identificar al analizador léxico como fuente de tokens para el sintactico
             CommonTokenStream tokens = new CommonTokenStream(lexer);
-            // Crear el objeto del analizador sintáctico a partir del buffer de tokens
             PythonParser parser = new PythonParser(tokens);
-            //System.out.println(tree.toStringTree(parser)); // imprime el arbol al estilo LISP
-            // Create a generic parse tree walker that can trigger callbacks
-            //ExtendedVisitors loader = new ExtendedVisitors();
-            //loader.visit(tree);
             ParseTree newTree = parser.file_input();
             CodeStatisticsVisitor loader1 = new CodeStatisticsVisitor();
             loader1.visit(newTree);
-            System.out.println(loader1.getFunctions());
+            System.out.println(loader1.getFunctionsLocal());
             System.out.println(loader1.getFunctionsDependency());
             System.out.println(loader1.getExternalDependency());
+            System.out.println("----------------------------");
+            PythonLexer lexer2=new PythonLexer(CharStreams.fromFileName("input/input.txt"));
+            CommonTokenStream tokens2 = new CommonTokenStream(lexer2);
+            PythonParser parser2 = new PythonParser(tokens2);
+            ExtendedVisitors visitor1 = new ExtendedVisitors();
+            visitor1.setFunctions(loader1.getFunctions());
+            visitor1.visit(parser2.file_input());
+
 
             Java8Lexer javaLexer=new Java8Lexer(CharStreams.fromFileName("input/input2.txt"));
             // Identificar al analizador léxico como fuente de tokens para el sintactico

@@ -1,5 +1,10 @@
+import com.github.difflib.text.DiffRow;
+import com.github.difflib.text.DiffRowGenerator;
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.misc.Interval;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
+import org.apache.commons.text.similarity.JaccardSimilarity;
 
 import java.lang.reflect.Array;
 import java.util.*;
@@ -26,6 +31,7 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
     private ArrayList<ClassStats> classes=new ArrayList<>();
     private double operants=0, ocurOperants=0, ocurOperators =0;
     private Set<String> operators= new HashSet<>();
+    private StringBuffer code = new StringBuffer();
     @Override
     public T visitSimple_stmt(PythonParser.Simple_stmtContext ctx) {
         // Increment the node count for each simple statement
@@ -76,6 +82,24 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
         System.out.println("Program effort time: "+ (((1.0/2.0)*((operators.size()/ocurOperators)+(operants/ocurOperants)))*(Math.log(operators.size()+operants) / Math.log(2))));
 
         fixFunctions();
+
+        getSimilar();
+
+        DiffRowGenerator generator = DiffRowGenerator.create()
+                .showInlineDiffs(true)
+                .inlineDiffByWord(true)
+                .oldTag(f -> "~")
+                .newTag(f -> "**")
+                .build();
+        List<DiffRow> rows = generator.generateDiffRows(
+                Arrays.asList("This is a test senctence.", "This is the second line.", "And here is the finish."),
+                Arrays.asList("This is a test for diffutils.", "This is the second line."));
+
+        System.out.println("|original|new|");
+        System.out.println("|--------|---|");
+        for (DiffRow row : rows) {
+            System.out.println("|" + row.getOldLine() + "|" + row.getNewLine() + "|");
+        }
 
         //for(FunctionSats func : functions){
         //    System.out.println(func.getName());
@@ -154,7 +178,11 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
             }
         }
         FunctionSats newFunc = new FunctionSats(currentFunction);
+        Interval interval = ctx.getSourceInterval();
+        System.out.println(ctx.getText().replaceAll("<DEDENT>","").replaceAll("<INDENT>",""));
+        System.out.println(ctx.getText().replaceAll("<DEDENT>","").replaceAll("<INDENT>",""));
         newFunc.setLength(ctx.getStart().getLine()-ctx.getStop().getLine()+1);
+        newFunc.setCode(ctx.getText().replaceAll("<DEDENT>","").replaceAll("<INDENT>","").split("\n"));
         functions.add(newFunc);
         scope.push(currentFunction);
         functionDependencies.put(currentFunction, new HashSet<>());
@@ -291,11 +319,95 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
     @Override
     public T visitFor_stmt(PythonParser.For_stmtContext ctx) {
         totalForStatements++;
-        visitChildren(ctx);
+        String startIndex = "0";
+        String finalIndex = "";
+        String complexity ="";
+        visitStar_targets(ctx.star_targets());
+        if(ctx.star_expressions()!=null){
+            String index = (String) visitStar_expressions(ctx.star_expressions());
+            if(index.split(",").length>1){
+                startIndex=index.split(",")[0];
+                finalIndex=index.split(",")[1];
+            }else{
+                finalIndex=index+".length";
+            }
 
+        }
+        if(!startIndex.isEmpty() && !finalIndex.isEmpty()){
+            if(Integer.valueOf(startIndex)==0){
+                complexity = finalIndex;
+            }else{
+                complexity = finalIndex+"-"+startIndex;
+            }
+        }
+        System.out.println("For complecity: "+complexity);
+        if(!scope.isEmpty()) {
+            for (FunctionSats func : functions) {
+                if(scope.peek().equals(func.getName())){
+                    func.setTime(func.getTime()+"+"+complexity);
+                }
+            }
+        }
+        visitBlock(ctx.block());
+        if(ctx.else_block()!=null){
+            visitElse_block(ctx.else_block());
+        }
         // You can add more logic here for statement-specific statistics
 
         return null;
+    }
+
+    @Override
+    public T visitStar_expressions(PythonParser.Star_expressionsContext ctx) {
+        return visitChildren(ctx);
+    }
+
+    @Override
+    public T visitStar_expression(PythonParser.Star_expressionContext ctx) {
+        if(ctx.expression()==null){
+            return null; //* bitwise_or
+        }
+        return visitChildren(ctx);
+    }
+
+    @Override
+    public T visitExpression(PythonParser.ExpressionContext ctx) {
+        if(ctx.lambdef()!=null){
+            return null; //* bitwise_or
+        }
+        return visitChildren(ctx);
+    }
+
+    @Override
+    public T visitDisjunction(PythonParser.DisjunctionContext ctx) {
+        if(ctx.conjunction().size()>1){
+            return null; //* bitwise_or
+        }
+        return visitChildren(ctx);
+    }
+
+    @Override
+    public T visitConjunction(PythonParser.ConjunctionContext ctx) {
+        if(ctx.inversion().size()>1){
+            return null; //* bitwise_or
+        }
+        return visitChildren(ctx);
+    }
+
+    @Override
+    public T visitInversion(PythonParser.InversionContext ctx) {
+        if(ctx.inversion()!=null){
+            return null; //* bitwise_or
+        }
+        return visitChildren(ctx);
+    }
+
+    @Override
+    public T visitComparison(PythonParser.ComparisonContext ctx) {
+        if(!ctx.compare_op_bitwise_or_pair().isEmpty()){
+            return null; //* bitwise_or
+        }
+        return visitChildren(ctx);
     }
 
     @Override
@@ -368,6 +480,18 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
         return visitChildren(ctx);
     }
 
+    @Override public T visitPrimary(PythonParser.PrimaryContext ctx) {
+        visitChildren(ctx);
+        String val = ctx.getText().toLowerCase();
+        if(val.contains("range") && !val.equals("range")){
+            val = val.split("\\(")[1].replaceFirst(".$", "");
+            if(!val.contains(",")){
+                val = "0,"+val;
+            }
+        }
+        return (T) val;
+    }
+
     @Override
     public T visitClass_def_raw(PythonParser.Class_def_rawContext ctx) {
         ClassStats newClass = new ClassStats(ctx.NAME().getText());
@@ -421,7 +545,7 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
         return names;
     }
 
-    public String getFunctions() {
+    public String getFunctionsLocal() {
         System.out.println(functions.size());
         StringBuilder func= new StringBuilder("Variables locales\n");
         for(final String key : localTable.keySet()){
@@ -478,11 +602,64 @@ public class CodeStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
             }
             function.getDependencies().addAll(dependencies);
         }
-        for(FunctionSats func: functions){
+        for(FunctionSats func: functions) {
             System.out.println(func.getName());
-            for(FunctionSats func1 :func.getDependencies()){
-                System.out.println("\t"+func1.getName());
+            for (FunctionSats func1 : func.getDependencies()) {
+                System.out.println("\t" + func1.getName());
             }
         }
+    }
+
+    public void getSimilar(){
+        for(int i =0 ; i < functions.size();i++){
+            for(int j = i+1; j < functions.size(); j++){
+                if(!functions.get(i).equals(functions.get(j))) {
+                    int maxLines =i;
+                    int maxLines2 =j;
+                    if(maxLines>functions.get(j).getCode().length){
+                        maxLines=j;
+                        maxLines2=i;
+                    }
+                    double media = 0;
+                    for(int k = 0; k<functions.get(maxLines2).getCode().length;k++)
+                    {
+                        String aux[] = new String[functions.get(maxLines2).getCode().length];
+                        for(int l=0;l<functions.get(maxLines2).getCode().length;l++){
+                            aux[(l+k)%functions.get(maxLines2).getCode().length]=functions.get(maxLines2).getCode()[l];
+                        }
+                        DiffRowGenerator generator = DiffRowGenerator.create()
+                                .showInlineDiffs(true)
+                                .inlineDiffByWord(true)
+                                .oldTag(f -> "~")
+                                .newTag(f -> "**")
+                                .build();
+                        List<DiffRow> rows = generator.generateDiffRows(
+                                Arrays.asList(functions.get(maxLines).getCode()),
+                                Arrays.asList(aux));
+
+
+                        //System.out.println("|original|new|");
+                        //System.out.println("|--------|---|");
+                        double counter = 0;
+                        double similar = 0;
+                        for (DiffRow row : rows) {
+                            if (counter < functions.get(maxLines).getCode().length) {
+                                if (row.getOldLine().contains("~") && row.getNewLine().contains("**")) {
+                                    similar++;
+                                }
+                            }
+                            counter++;
+                        }
+                        media += (double) (similar / counter);
+                        //System.out.println("Porp similarity: " + (similar / counter));
+                    }
+                    System.out.println("PROP FINAL: "+(media/functions.get(maxLines2).getCode().length));
+                }
+            }
+        }
+    }
+
+    public ArrayList<FunctionSats> getFunctions() {
+        return functions;
     }
 }

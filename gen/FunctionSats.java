@@ -1,4 +1,5 @@
 import java.util.ArrayList;
+import java.util.HashMap;
 
 public class FunctionSats {
     private String name;
@@ -9,7 +10,10 @@ public class FunctionSats {
     private ArrayList<Integer> way;
     private int length;
     private ArrayList<FunctionSats> dependencies;
-
+    private String time;
+    private String[] code;
+    private HashMap<String, String> rawCode;
+    private HashMap<String, ArrayList<Double>> duplicity;
     public FunctionSats(String name){
         this.name=name;
         this.ciclomatic=0;
@@ -19,6 +23,9 @@ public class FunctionSats {
         this.graph=new ArrayList<>();
         this.length=0;
         this.dependencies=new ArrayList<>();
+        this.time="";
+        this.rawCode= new HashMap<>();
+        this.duplicity = new HashMap<>();
     };
 
     public String getName() {
@@ -67,6 +74,30 @@ public class FunctionSats {
 
     public ArrayList<FunctionSats> getDependencies() {
         return dependencies;
+    }
+
+    public String getTime() {
+        return time;
+    }
+
+    public void setTime(String time) {
+        this.time = time;
+    }
+
+    public String[] getCode() {
+        return code;
+    }
+
+    public void setCode(String[] code) {
+        this.code = code;
+    }
+
+    public HashMap<String, String> getRawCode() {
+        return rawCode;
+    }
+
+    public HashMap<String, ArrayList<Double>> getDuplicity() {
+        return duplicity;
     }
 
     public void printGraph(){

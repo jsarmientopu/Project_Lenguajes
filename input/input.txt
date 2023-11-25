@@ -1,21 +1,32 @@
 from math import pi
 import numpy as np
-
 class Circle:
+    @hola
     def __init__(self, radius):
         self.radius = radius
 
     def area(self):
         return pi * radius**2
-
 var=0
 var1=0
 var11=0
 var111=0
 def loco(a):
+    for i in range(0, a):
+        print(i)
+    for i in range(a+90):
+        print(i)
+    for i in result:
+        print(i)
     return l*pi
 def square():
     global var, loco
+    for i in range(0, a):
+        print(i)
+    for i in range(a+90):
+        print(i)
+    for i in result:
+        print(i)
     a = 0
     b = loco(a)
     v = 0
@@ -27,5 +38,6 @@ def square():
         print(np.random(2))
         return 0
     return var*var
-
+def mathloco():
+    print(pi)
 square()
