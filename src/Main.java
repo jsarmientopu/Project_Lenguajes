@@ -23,6 +23,10 @@ public class Main {
             System.out.println(loader1.getFunctions());
             System.out.println(loader1.getFunctionsDependency());
             System.out.println(loader1.getExternalDependency());
+            System.out.println("---------------------------");
+            ExtraStatisticsVisitor loader2 = new ExtraStatisticsVisitor();
+            loader2.visit(newTree);
+            loader2.getUnusedVariables();
         } catch (Exception e){
             System.err.println("Error (Test): " + e);
         }
