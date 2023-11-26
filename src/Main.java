@@ -5,9 +5,9 @@ import org.antlr.v4.runtime.tree.*;
 
 public class Main {
     public static void main(String[] args) throws Exception {
-        try{
+        try {
             // crear un analizador léxico a partir de la entrada (archivo  o consola)
-            PythonLexer lexer=new PythonLexer(CharStreams.fromFileName("input/input.txt"));
+            PythonLexer lexer = new PythonLexer(CharStreams.fromFileName("input/input.txt"));
             // Identificar al analizador léxico como fuente de tokens para el sintactico
             CommonTokenStream tokens = new CommonTokenStream(lexer);
             // Crear el objeto del analizador sintáctico a partir del buffer de tokens
@@ -23,7 +23,7 @@ public class Main {
             System.out.println(loader1.getFunctions());
             System.out.println(loader1.getFunctionsDependency());
             System.out.println(loader1.getExternalDependency());
-        } catch (Exception e){
+        } catch (Exception e) {
             System.err.println("Error (Test): " + e);
         }
     }
