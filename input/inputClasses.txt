@@ -1,0 +1,22 @@
+# Definimos una clase padre
+class Animal:
+    pass
+
+# Creamos una clase hija que hereda de la padre
+class Perro(Animal):
+    pass
+
+
+
+
+class Clase1:
+    pass
+
+class Clase2:
+    pass
+
+class Clase3:
+    pass
+
+class Clase4(Clase1, Clase3, Clase2):
+    pass
