@@ -4,9 +4,26 @@ import org.antlr.v4.runtime.tree.TerminalNode;
 import java.lang.reflect.Array;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.regex.Pattern;
+import static java.util.Map.entry;
 
 public class ExtraStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
 
+    String camelCaseRegex = "^[a-z][a-zA-Z0-9]*$";
+    String snakeCaseRegex = "^[a-z][a-z0-9_]*$";
+    String builtinFunction=  "^__[a-zA-Z_]\\w*__$";
+
+    private Map<Integer, String> caseStyle = Map.ofEntries(
+            entry(1,"Camel Case"),
+            entry(2,"Snake Case"),
+            entry(3,"Other Style")
+            );
+    private ArrayList<ArrayList<Integer>> varPattern = new ArrayList<>(4) {{
+        add(new ArrayList<>());
+        add(new ArrayList<>());
+        add(new ArrayList<>());
+        add(new ArrayList<>());
+    }};
     private int totalLines = 0;
     private int totalFunctions = 0;
     private int totalGlobalVariables = 0;
@@ -94,10 +111,11 @@ public class ExtraStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
                 List<Integer> aux = new ArrayList<>();
                 aux.add(1);
                 aux.add(ctx.getStop().getLine());
-
                 variableCounter.put(ctx.NAME().getText(), aux);
                 totalVariableNameLength += ctx.NAME().getText().length();
                 totalVariables++;
+
+                checkStyle(ctx.NAME().getText(), false, ctx.getStart().getLine());
             }else{
                 List<Integer> modified = variableCounter.get(ctx.NAME().getText());
                 modified.set(0,modified.get(0)+1);
@@ -160,7 +178,7 @@ public class ExtraStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
         scope.add(currentFunction);
         functionDependencies.put(currentFunction, new HashSet<>());
         //System.out.println("Visited Function Definition: " + currentFunction);
-
+        checkStyle(currentFunction, true, ctx.function_def_raw().getStart().getLine());
         // You can add more logic here for function-specific statistics
         visitChildren(ctx);
 
@@ -357,5 +375,45 @@ public class ExtraStatisticsVisitor<T> extends PythonParserBaseVisitor<T> {
         for(String key: unused.keySet()){
             System.out.println("Variable "+key+" declared in line "+ unused.get(key));
         }
+    }
+
+    private void checkStyle(String s, boolean isFunc, int line){
+        if(isFunc && s.matches(builtinFunction)){
+            return;
+        }
+        if(s.matches(camelCaseRegex) && s.matches(snakeCaseRegex)){
+            varPattern.get(0).add(line);
+        }else if(s.matches(camelCaseRegex)){
+            varPattern.get(1).add(line);
+        }else if (s.matches(snakeCaseRegex)) {
+            varPattern.get(2).add(line);
+        }else {
+            varPattern.get(3).add(line);
+        }
+    }
+
+    public ArrayList<ArrayList<Integer>> styleStats(){
+        int camel = varPattern.get(1).size();
+        int snake = varPattern.get(2).size();
+        int other = varPattern.get(3).size();
+
+        boolean valid = false;
+
+        if(camel > 0 && snake > 0) valid = true;
+        if(camel > 0 && other > 0) valid = true;
+        if(other > 0 && snake > 0) valid = true;
+
+        if(valid){
+            System.out.println("You are using different conventions for naming your variables," +
+                    " try refactoring them.");
+            for(int i = 1 ; i < varPattern.size() ; i++){
+                if(varPattern.get(i).size() > 0 ){
+                    System.out.println("Variables and functions named in " + caseStyle.get(i) +
+                            ": "+ varPattern.get(i).size() + " "+varPattern.get(i).toString());
+                }
+            }
+        }
+
+        return varPattern;
     }
 }

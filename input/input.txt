@@ -4,19 +4,25 @@ class Circle:
     def __init__(self, radius):
         self.radius = radius
 
-    def area(self):
+    def areaA(self):
         return pi * radius**2
 
 var=0
-var1=0
-var11=0
+var1=10
+var11=80
 var111=0
-def loco(a):
+def loco_loco(a):
     return l*pi
-def square():
+def squareCuadrado():
     global var, loco
     a = 0
     b = loco(a)
+    print(b,a,var)
     return var*var
 
 square()
+
+var = var1 + var11
+
+for i in range(3):
+    print(var1)

@@ -26,7 +26,10 @@ public class Main {
             System.out.println("---------------------------");
             ExtraStatisticsVisitor loader2 = new ExtraStatisticsVisitor();
             loader2.visit(newTree);
+            System.out.println();
             loader2.getUnusedVariables();
+            //System.out.println(tokens.get(0).toString());
+            loader2.styleStats();
         } catch (Exception e){
             System.err.println("Error (Test): " + e);
         }
